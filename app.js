@@ -34,7 +34,19 @@ function clone(value) {
 function loadProject() {
   try {
     const saved = localStorage.getItem('railgraph-project');
-    if (saved) return { ...clone(defaultProject), ...JSON.parse(saved) };
+    if (!saved) return clone(defaultProject);
+    const parsed = JSON.parse(saved);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return clone(defaultProject);
+    return {
+      ...clone(defaultProject),
+      ...parsed,
+      stations: Array.isArray(parsed.stations) && parsed.stations.length > 0
+        ? parsed.stations
+        : clone(defaultProject.stations),
+      timetable: Array.isArray(parsed.timetable) && parsed.timetable.length > 0
+        ? parsed.timetable
+        : clone(defaultProject.timetable),
+    };
   } catch (error) {
     console.warn('Could not load the saved project.', error);
   }
@@ -109,9 +121,10 @@ function renderShell() {
   const first = project.stations[0];
   const last = project.stations[project.stations.length - 1];
   const totalDistance = last ? last.distance : 0;
-  $('#sidebar-project-name').textContent = project.name;
-  $('#sidebar-project-meta').textContent = `${project.stations.length} stations · ${formatNumber(totalDistance)} km`;
-  $('#route-label').innerHTML = `${first?.name || 'Origin'} <b>→</b> ${last?.name || 'Destination'}`;
+  if ($('#sidebar-project-name')) $('#sidebar-project-name').textContent = project.name;
+  if ($('#sidebar-project-meta')) $('#sidebar-project-meta').textContent = `${project.stations.length} stations · ${formatNumber(totalDistance)} km`;
+  if ($('#route-label')) $('#route-label').innerHTML = `${first?.name || 'Origin'} <b>→</b> ${last?.name || 'Destination'}`;
+  if ($('#project-breadcrumb')) $('#project-breadcrumb').textContent = project.name;
   if ($('#train-name')) $('#train-name').value = project.trainName;
   if ($('#graph-train-name')) $('#graph-train-name').textContent = project.trainName;
   if ($('#legend-train-name')) $('#legend-train-name').textContent = project.trainName;
@@ -126,24 +139,40 @@ function renderInfrastructure() {
     <div class="stat-card"><span class="stat-label">SECTIONS</span><span class="stat-value">${Math.max(0, project.stations.length - 1)} <small class="field-unit">SECTIONS</small></span></div>
     <div class="stat-card"><span class="stat-label">HIGHEST LINE SPEED</span><span class="stat-value stat-accent">${speeds.length ? Math.max(...speeds) : 0} <small class="field-unit">KM/H</small></span></div>
   `;
-  $('#station-list').innerHTML = project.stations.map((station, index) => `
-    <div class="station-row" data-station-id="${station.id}">
-      <span class="order-number">${String(index + 1).padStart(2, '0')}</span>
-      <div class="station-main">
-        <span class="station-marker"></span>
-        <div>
-          <input class="station-name-input" data-field="name" value="${escapeAttribute(station.name)}" aria-label="Station ${index + 1} name" />
-          <div class="station-subtitle">${index === 0 ? 'Origin station' : index === project.stations.length - 1 ? 'Terminal station' : `Station ${String(index).padStart(2, '0')}`}</div>
+  $('#station-list').innerHTML = project.stations.map((station, index) => {
+    const isLast = index === project.stations.length - 1;
+    const nextStation = project.stations[index + 1];
+    const sectionLength = nextStation ? Math.max(0, nextStation.distance - station.distance) : 0;
+    const sectionName = station.sectionName || `${station.name} — ${nextStation?.name || 'Section'}`;
+    return `
+      <div class="station-row" data-station-id="${station.id}">
+        <span class="order-number">${String(index + 1).padStart(2, '0')}</span>
+        <div class="station-main">
+          <span class="station-marker"></span>
+          <div>
+            <input class="station-name-input" data-field="name" value="${escapeAttribute(station.name)}" aria-label="Station ${index + 1} name" />
+            <div class="station-subtitle">${index === 0 ? 'Origin station' : isLast ? 'Terminal station' : `Station ${String(index).padStart(2, '0')}`}</div>
+          </div>
         </div>
+        <div class="field-with-unit station-distance">${index === 0
+          ? '<span class="field-unit">—</span>'
+          : `<input class="inline-input" data-field="distance" type="number" min="0" step="0.1" value="${station.distance}" aria-label="${station.name} distance" /><span class="field-unit">KM</span>`}</div>
+        <button class="delete-button" data-action="delete-station" aria-label="Delete ${station.name}" ${project.stations.length <= 2 ? 'disabled' : ''}>×</button>
       </div>
-      <div class="field-with-unit"><input class="inline-input" data-field="distance" type="number" min="0" step="0.1" value="${station.distance}" aria-label="${station.name} distance" /><span class="field-unit">KM</span></div>
-      <div class="field-with-unit">${index === project.stations.length - 1
-        ? '<span class="field-unit">—</span>'
-        : `<input class="inline-input speed-input" data-field="speed" type="number" min="1" step="5" value="${station.speed}" aria-label="${station.name} speed" /><span class="field-unit">KM/H</span>`}</div>
-      <span class="section-pill ${index === project.stations.length - 1 ? 'terminal' : ''}">${index === project.stations.length - 1 ? 'TERMINAL' : `${formatNumber(project.stations[index].distance)} — ${formatNumber(project.stations[index + 1].distance)} KM`}</span>
-      <button class="delete-button" data-action="delete-station" aria-label="Delete ${station.name}" ${project.stations.length <= 2 ? 'disabled' : ''}>×</button>
-    </div>
-  `).join('');
+      ${!isLast ? `
+        <div class="section-row" data-station-id="${station.id}">
+          <span class="section-connector"></span>
+          <div class="section-details">
+            <input class="section-name-input" data-field="sectionName" value="${escapeAttribute(sectionName)}" aria-label="Section between ${station.name} and ${nextStation.name}" />
+            <div class="section-metrics">
+              <span class="section-metric"><span class="metric-label">LENGTH</span><strong>${formatNumber(sectionLength)}</strong><span class="field-unit">KM</span></span>
+              <span class="section-metric"><span class="metric-label">SPEED</span><input class="inline-input speed-input" data-field="speed" type="number" min="1" step="5" value="${station.speed || 0}" aria-label="${sectionName} speed" /><span class="field-unit">KM/H</span></span>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+    `;
+  }).join('');
   $('#station-count').textContent = `${project.stations.length} STATIONS`;
 }
 
@@ -322,6 +351,7 @@ function reverseRoute() {
     ...station,
     distance: Number((reversedStations[0].distance - station.distance).toFixed(1)),
     speed: index === 0 || index === reversedStations.length - 1 ? 0 : station.speed,
+    sectionName: index < reversedStations.length - 1 ? reversedStations[index + 1].sectionName : undefined,
   }));
   project.timetable = oldRows.map(({ row }) => ({ ...row, arrival: row.arrival })).reverse();
   project.timetable[0].arrival = oldRows.at(-1).row.arrival;
@@ -347,6 +377,7 @@ $('#station-list')?.addEventListener('change', (event) => {
   const station = project.stations.find((item) => item.id === row.dataset.stationId);
   const field = input.dataset.field;
   if (field === 'name') station.name = input.value.trim() || 'Unnamed station';
+  else if (field === 'sectionName') station.sectionName = input.value.trim() || 'Unnamed section';
   else station[field] = Math.max(0, Number(input.value) || 0);
   project.stations = project.stations.map((item, index, stations) => index === 0 ? { ...item, distance: 0 } : index === stations.length - 1 ? { ...item, speed: 0 } : item);
   renderAll();
