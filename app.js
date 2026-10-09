@@ -10,12 +10,12 @@ const defaultProject = {
     { id: 'eastvale', name: 'Eastvale', distance: 42.8, speed: 0 },
   ],
   timetable: [
-    { arrival: '06:40', run: 0, dwell: 0, platform: '1' },
-    { arrival: '06:49', run: 9, dwell: 1, platform: '2' },
-    { arrival: '06:58', run: 8, dwell: 1, platform: '1' },
-    { arrival: '07:08', run: 9, dwell: 2, platform: '2' },
-    { arrival: '07:20', run: 10, dwell: 1, platform: '1' },
-    { arrival: '07:30', run: 9, dwell: 0, platform: '3' },
+    { arrival: '06:40', departure: '06:40', run: 0, dwell: 0 },
+    { arrival: '06:49', run: 9, dwell: 1 },
+    { arrival: '06:58', run: 8, dwell: 1 },
+    { arrival: '07:08', run: 9, dwell: 2 },
+    { arrival: '07:20', run: 10, dwell: 1 },
+    { arrival: '07:30', run: 9, dwell: 0 },
   ],
 };
 
@@ -44,7 +44,12 @@ function loadProject() {
         ? parsed.stations
         : clone(defaultProject.stations),
       timetable: Array.isArray(parsed.timetable) && parsed.timetable.length > 0
-        ? parsed.timetable
+        ? parsed.timetable.map(({ arrival, departure, run, dwell }) => ({
+          arrival,
+          ...(departure ? { departure } : {}),
+          run,
+          dwell,
+        }))
         : clone(defaultProject.timetable),
     };
   } catch (error) {
@@ -95,14 +100,21 @@ function recalculateTimetable(startIndex = 0) {
   const safeStartIndex = Math.max(0, Math.min(startIndex, project.stations.length - 1));
   let current = parseTime(project.timetable[safeStartIndex]?.arrival || project.timetable[0]?.arrival || '06:40');
   for (let index = safeStartIndex; index < project.stations.length; index += 1) {
-    const row = project.timetable[index] || { arrival: formatTime(current), run: estimateRunningTime(index), dwell: 0, platform: '' };
-    if (index === safeStartIndex) current = parseTime(row.arrival || formatTime(current));
+    const row = project.timetable[index] || { arrival: formatTime(current), run: estimateRunningTime(index), dwell: 0 };
+    if (index === safeStartIndex) current = index === 0
+      ? parseTime(row.departure || row.arrival || formatTime(current))
+      : parseTime(row.arrival || formatTime(current));
     row.run = index === 0 ? 0 : Math.max(1, Number(row.run) || estimateRunningTime(index));
-    row.arrival = formatTime(current);
-    row.dwell = Number.isFinite(Number(row.dwell)) ? Math.max(0, Number(row.dwell)) : 0;
+    row.dwell = index === 0 || index === project.stations.length - 1
+      ? 0
+      : Number.isFinite(Number(row.dwell)) ? Math.max(0, Number(row.dwell)) : 0;
+    row.arrival = index === 0 && row.departure
+      ? formatTime(parseTime(row.departure) - row.dwell)
+      : formatTime(current);
+    if (index === 0) row.departure = formatTime(parseTime(row.arrival) + row.dwell);
     project.timetable[index] = row;
     if (index < project.stations.length - 1) {
-      const nextRow = project.timetable[index + 1] || { arrival: formatTime(current), run: estimateRunningTime(index + 1), dwell: 0, platform: '' };
+      const nextRow = project.timetable[index + 1] || { arrival: formatTime(current), run: estimateRunningTime(index + 1), dwell: 0 };
       project.timetable[index + 1] = nextRow;
       current += row.dwell + Math.max(1, Number(nextRow.run) || estimateRunningTime(index + 1));
     }
@@ -191,9 +203,13 @@ function renderTimetable() {
   const start = rows[0];
   const end = rows.at(-1);
   const journey = end && start ? parseTime(end.row.arrival) - parseTime(start.row.arrival) : 0;
-  const dwellTotal = rows.reduce((sum, item) => sum + Number(item.row.dwell || 0), 0);
+  const dwellTotal = rows.slice(1, -1).reduce((sum, item) => sum + Number(item.row.dwell || 0), 0);
+  
   $('#timetable-summary').innerHTML = `
-    <div class="summary-item"><span class="summary-label">DEPARTURE</span><span class="summary-value teal">${start?.row.arrival || '—'}</span></div>
+    <div class="summary-item">
+      <span class="summary-label">DEPARTURE</span>
+      <input class="time-field teal" data-field="global-departure" type="time" value="${start?.departure || '06:40'}" aria-label="Origin departure time" style="font-weight: 600; font-size: 1rem; background: rgba(13, 159, 145, 0.1); border: 1px solid rgba(13, 159, 145, 0.3); border-radius: 6px; color: var(--teal, #0d9f91); padding: 4px 12px; text-align: center; outline: none; cursor: pointer; width: auto;" />
+    </div>
     <span class="summary-divider"></span>
     <div class="summary-item"><span class="summary-label">ARRIVAL</span><span class="summary-value">${end?.row.arrival || '—'}</span></div>
     <span class="summary-divider"></span>
@@ -201,14 +217,14 @@ function renderTimetable() {
     <span class="summary-divider"></span>
     <div class="summary-item"><span class="summary-label">TOTAL DWELL</span><span class="summary-value">${dwellTotal} min</span></div>
   `;
+
   $('#timetable-list').innerHTML = rows.map(({ station, row, departure }, index) => `
     <div class="timetable-row" data-row-index="${index}">
       <div class="stop-cell"><span class="stop-dot"></span><div><div class="stop-name">${escapeHtml(station.name)}</div><div class="stop-role">${index === 0 ? 'ORIGIN' : index === rows.length - 1 ? 'TERMINAL' : `STOP ${String(index).padStart(2, '0')}`}</div></div></div>
-      <span class="time-cell"><strong>${row.arrival}</strong></span>
-      <span class="time-cell"><strong>${departure}</strong></span>
-      ${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="running" type="number" min="1" step="1" value="${runningTimeFor(index)}" aria-label="Running time to ${station.name}" /> <span class="field-unit">min</span>`}
-      <div class="field-with-unit"><input class="time-field" data-field="dwell" type="number" min="0" step="1" value="${row.dwell}" aria-label="Dwell at ${station.name}" /><span class="field-unit">min</span></div>
-      <input class="time-field platform" data-field="platform" value="${escapeAttribute(row.platform || '')}" aria-label="Platform at ${station.name}" />
+      <span class="time-cell"><strong>${index === 0 ? '—' : row.arrival}</strong></span>
+      <span class="time-cell"><strong class="${index === 0 ? 'teal' : ''}">${index === rows.length - 1 ? '—' : departure}</strong></span>
+      <div class="field-with-unit">${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="running" type="number" min="1" step="1" value="${runningTimeFor(index)}" aria-label="Running time to ${station.name}" /> <span class="field-unit">min</span>`}</div>
+      <div class="field-with-unit">${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="dwell" type="number" min="0" step="1" value="${row.dwell}" aria-label="Dwell at ${station.name}" /> <span class="field-unit">min</span>`}</div>
     </div>
   `).join('');
   $('#timetable-count').textContent = `${rows.length} STOPS`;
@@ -226,8 +242,8 @@ function renderGraph() {
   const last = project.stations.at(-1);
   $('#graph-origin').textContent = first?.name || '—';
   $('#graph-destination').textContent = last?.name || '—';
-  $('#graph-departure').textContent = rows[0]?.row.arrival || '—';
-  $('#graph-journey').textContent = rows.length > 1 ? durationLabel(parseTime(rows.at(-1).row.arrival) - parseTime(rows[0].row.arrival)) : '—';
+  $('#graph-departure').textContent = rows[0]?.departure || '—';
+  $('#graph-journey').textContent = rows.length > 1 ? durationLabel(parseTime(rows.at(-1).row.arrival) - parseTime(rows[0].departure)) : '—';
   const svg = $('#train-chart');
   if (project.stations.length < 2) {
     svg.innerHTML = '';
@@ -240,7 +256,7 @@ function renderGraph() {
   const margin = { top: 25, right: 30, bottom: 43, left: 116 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const startMinutes = parseTime(rows[0].row.arrival);
+  const startMinutes = parseTime(rows[0].departure);
   const finishMinutes = parseTime(rows.at(-1).row.arrival) + 10;
   const totalMinutes = finishMinutes - startMinutes;
   const gridStep = graphScale;
@@ -264,13 +280,13 @@ function renderGraph() {
   });
   const trajectoryPoints = [];
   rows.forEach(({ station, row, departure }) => {
-    trajectoryPoints.push(`${x(parseTime(row.arrival))},${y(station.distance)}`);
+    trajectoryPoints.push(`${x(parseTime(station === project.stations[0] ? departure : row.arrival))},${y(station.distance)}`);
     trajectoryPoints.push(`${x(parseTime(departure))},${y(station.distance)}`);
   });
   const points = trajectoryPoints.join(' ');
   parts.push(`<polyline points="${points}" fill="none" stroke="#ef865b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
   rows.forEach(({ station, row, departure }) => {
-    const arrivalX = x(parseTime(row.arrival));
+    const arrivalX = x(parseTime(station === project.stations[0] ? departure : row.arrival));
     const departureX = x(parseTime(departure));
     const stationY = y(station.distance);
     if (departureX - arrivalX > 1) parts.push(`<line x1="${arrivalX}" y1="${stationY}" x2="${departureX}" y2="${stationY}" stroke="#efb19b" stroke-width="5" stroke-linecap="round"/>`);
@@ -323,7 +339,6 @@ function addStation() {
     arrival: formatTime(parseTime(previousRow.arrival) + Number(previousRow.dwell || 0) + run),
     run,
     dwell: 1,
-    platform: '',
   });
   recalculateTimetable(terminalIndex);
   renderAll();
@@ -392,14 +407,25 @@ $('#timetable-list')?.addEventListener('change', (event) => {
   if (field === 'dwell') {
     project.timetable[index].dwell = Math.max(0, Number(input.value) || 0);
     recalculateTimetable(index);
-  } else if (field === 'platform') {
-    project.timetable[index].platform = input.value.trim();
+  } else if (field === 'departure') {
+    project.timetable[index].departure = input.value;
+    recalculateTimetable(index);
   } else if (field === 'running') {
     const previous = project.timetable[index - 1];
     project.timetable[index].run = Math.max(1, Number(input.value) || 1);
     project.timetable[index].arrival = formatTime(parseTime(previous.arrival) + Number(previous.dwell || 0) + project.timetable[index].run);
     recalculateTimetable(index);
   }
+  renderAll();
+  saveProject();
+});
+
+$('#timetable-summary')?.addEventListener('change', (event) => {
+  const input = event.target.closest('[data-field="global-departure"]');
+  if (!input || !project.timetable.length) return;
+  
+  project.timetable[0].departure = input.value;
+  recalculateTimetable(0);
   renderAll();
   saveProject();
 });

@@ -11,11 +11,11 @@ window.railGraphLines['morning-regional'] = {
     { id: 'eastvale', name: 'Eastvale', distance: 42.8, speed: 0 },
   ],
   timetable: [
-    { arrival: '06:40', run: 0, dwell: 0, platform: '1' },
-    { arrival: '06:49', run: 9, dwell: 1, platform: '2' },
-    { arrival: '06:58', run: 8, dwell: 1, platform: '1' },
-    { arrival: '07:08', run: 9, dwell: 2, platform: '2' },
-    { arrival: '07:20', run: 10, dwell: 1, platform: '1' },
-    { arrival: '07:30', run: 9, dwell: 0, platform: '3' },
+    { arrival: '06:40', departure: '06:40', run: 0, dwell: 0 },
+    { arrival: '06:49', run: 9, dwell: 1 },
+    { arrival: '06:58', run: 8, dwell: 1 },
+    { arrival: '07:08', run: 9, dwell: 2 },
+    { arrival: '07:20', run: 10, dwell: 1 },
+    { arrival: '07:30', run: 9, dwell: 0 },
   ],
 };

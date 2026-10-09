@@ -10,10 +10,10 @@ window.railGraphLines['valley-branch'] = {
     { id: 'summit', name: 'Summit', distance: 28.6, speed: 0 },
   ],
   timetable: [
-    { arrival: '07:10', run: 0, dwell: 0, platform: '1' },
-    { arrival: '07:16', run: 6, dwell: 1, platform: '1' },
-    { arrival: '07:23', run: 7, dwell: 1, platform: '2' },
-    { arrival: '07:30', run: 7, dwell: 1, platform: '1' },
-    { arrival: '07:37', run: 7, dwell: 0, platform: '1' },
+    { arrival: '07:10', departure: '07:10', run: 0, dwell: 0 },
+    { arrival: '07:16', run: 6, dwell: 1 },
+    { arrival: '07:23', run: 7, dwell: 1 },
+    { arrival: '07:30', run: 7, dwell: 1 },
+    { arrival: '07:37', run: 7, dwell: 0 },
   ],
 };

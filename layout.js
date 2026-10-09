@@ -7,6 +7,8 @@ const workspacePages = [
 function renderWorkspaceNavigation() {
   const navigation = document.querySelector('#workspace-nav');
   if (!navigation) return;
+  const shell = document.querySelector('.app-shell');
+  shell?.classList.add('sidebar-collapsed');
   const currentPage = window.location.pathname.split(/[\\/]/).pop() || 'infrastructure.html';
   navigation.innerHTML = workspacePages.map((page) => `
     <a class="nav-item${page.href === currentPage ? ' active' : ''}" href="${page.href}">
