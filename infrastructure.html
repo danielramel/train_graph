@@ -86,8 +86,7 @@
               <p>Set the departure, running times, and dwell for each stop.</p>
             </div>
             <div class="section-actions">
-              <label class="train-name-input"><span>TRAIN</span><input id="train-name" value="RG 201" aria-label="Train name" /></label>
-              <button class="button button-secondary" id="reverse-route">⇄ Reverse route</button>
+              <label class="train-name-input"><span>TRAIN</span><input id="train-name" value="RG 201" aria-label="Train name" /></label><button class="button button-secondary" id="reverse-route">⇄ Reverse direction</button>
             </div>
           </div>
 
@@ -121,7 +120,6 @@
               <div class="graph-stat"><span class="mini-label">DESTINATION</span><strong id="graph-destination">Eastvale</strong></div>
               <div class="graph-stat"><span class="mini-label">DEPARTURE</span><strong id="graph-departure">06:40</strong></div>
               <div class="graph-stat"><span class="mini-label">JOURNEY</span><strong id="graph-journey">01:38</strong></div>
-              <div class="graph-scale"><span>TIME SCALE</span><button class="scale-button active" data-scale="60">60 min</button><button class="scale-button" data-scale="30">30 min</button></div>
             </div>
             <div class="chart-wrap">
               <svg id="train-chart" role="img" aria-label="Train time-distance graph"></svg>
@@ -138,6 +136,6 @@
     </div>
     <input type="file" id="import-file" accept="application/json" hidden />
     <script src="layout.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

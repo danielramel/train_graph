@@ -1,3 +1,13 @@
+import {
+  createEstimatedTimetable as createEstimatedTimetablePure,
+  durationLabel,
+  estimateRunningTime as estimateRunningTimePure,
+  formatTime,
+  parseTime,
+  recalculateTimetable as recalculateTimetablePure,
+} from './src/timetable.js';
+import { loadProject as loadStoredProject } from './src/project-store.js';
+
 const defaultProject = {
   name: 'Morning regional',
   trains: [{
@@ -26,7 +36,6 @@ let project = loadProject();
 let selectedTrainId = localStorage.getItem('railgraph-selected-train');
 if (!project.trains.some((train) => train.id === selectedTrainId)) selectedTrainId = project.trains[0]?.id;
 let activeTab = 'infrastructure';
-let graphScale = 60;
 let saveTimer;
 
 const $ = (selector) => document.querySelector(selector);
@@ -37,47 +46,7 @@ function clone(value) {
 }
 
 function loadProject() {
-  try {
-    const saved = localStorage.getItem('railgraph-project');
-    if (!saved) return clone(defaultProject);
-    const parsed = JSON.parse(saved);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return clone(defaultProject);
-    const legacyTimetable = Array.isArray(parsed.timetable) && parsed.timetable.length > 0
-      ? parsed.timetable
-      : defaultProject.trains[0].timetable;
-    const trains = Array.isArray(parsed.trains) && parsed.trains.length > 0
-      ? parsed.trains.map((train, index) => ({
-        id: train.id || `train-${index + 1}`,
-        name: train.name || `Train ${index + 1}`,
-        timetable: Array.isArray(train.timetable) && train.timetable.length > 0
-          ? train.timetable
-          : clone(defaultProject.trains[0].timetable),
-      }))
-      : [{
-        id: 'train-1',
-        name: parsed.trainName || defaultProject.trains[0].name,
-        timetable: legacyTimetable,
-      }];
-    return {
-      ...clone(defaultProject),
-      ...parsed,
-      stations: Array.isArray(parsed.stations) && parsed.stations.length > 0
-        ? parsed.stations
-        : clone(defaultProject.stations),
-      trains: trains.map((train) => ({
-        ...train,
-        timetable: train.timetable.map(({ arrival, departure, run, dwell }) => ({
-          arrival,
-          ...(departure ? { departure } : {}),
-          run,
-          dwell,
-        })),
-      })),
-    };
-  } catch (error) {
-    console.warn('Could not load the saved project.', error);
-  }
-  return clone(defaultProject);
+  return loadStoredProject(localStorage, 'railgraph-project', defaultProject, clone);
 }
 
 function activeTrain() {
@@ -90,17 +59,7 @@ function selectTrain(id) {
 }
 
 function createEstimatedTimetable(startTime = '06:40') {
-  let current = parseTime(startTime);
-  return project.stations.map((station, index) => {
-    const row = {
-      arrival: formatTime(current),
-      run: index === 0 ? 0 : estimateRunningTime(index),
-      dwell: index === 0 || index === project.stations.length - 1 ? 0 : 1,
-    };
-    if (index === 0) row.departure = row.arrival;
-    current += row.run + row.dwell;
-    return row;
-  });
+  return createEstimatedTimetablePure(project.stations, estimateRunningTimePure, startTime);
 }
 
 function saveProject() {
@@ -121,58 +80,34 @@ function formatNumber(number) {
   return Number(number).toFixed(1).replace('.0', '');
 }
 
-function parseTime(value) {
-  const [hours, minutes] = value.split(':').map(Number);
-  return (hours * 60) + minutes;
-}
-
-function formatTime(totalMinutes) {
-  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
-}
-
-function durationLabel(minutes) {
-  const rounded = Math.max(0, Math.round(minutes));
-  return `${String(Math.floor(rounded / 60)).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
-}
-
 function distanceLabel(number) {
   return `${formatNumber(number)} km`;
 }
 
 function recalculateTimetable(startIndex = 0) {
-  const timetable = activeTrain()?.timetable;
-  if (!timetable?.length) return;
-  const safeStartIndex = Math.max(0, Math.min(startIndex, project.stations.length - 1));
-  let current = parseTime(timetable[safeStartIndex]?.arrival || timetable[0]?.arrival || '06:40');
-  for (let index = safeStartIndex; index < project.stations.length; index += 1) {
-    const row = timetable[index] || { arrival: formatTime(current), run: estimateRunningTime(index), dwell: 0 };
-    if (index === safeStartIndex) current = index === 0
-      ? parseTime(row.departure || row.arrival || formatTime(current))
-      : parseTime(row.arrival || formatTime(current));
-    row.run = index === 0 ? 0 : Math.max(1, Number(row.run) || estimateRunningTime(index));
-    row.dwell = index === 0 || index === project.stations.length - 1
-      ? 0
-      : Number.isFinite(Number(row.dwell)) ? Math.max(0, Number(row.dwell)) : 0;
-    row.arrival = index === 0 && row.departure
-      ? formatTime(parseTime(row.departure) - row.dwell)
-      : formatTime(current);
-    if (index === 0) row.departure = formatTime(parseTime(row.arrival) + row.dwell);
-    timetable[index] = row;
-    if (index < project.stations.length - 1) {
-      const nextRow = timetable[index + 1] || { arrival: formatTime(current), run: estimateRunningTime(index + 1), dwell: 0 };
-      timetable[index + 1] = nextRow;
-      current += row.dwell + Math.max(1, Number(nextRow.run) || estimateRunningTime(index + 1));
-    }
-  }
-  timetable.length = project.stations.length;
+  const train = activeTrain();
+  if (!train) return;
+  recalculateTimetablePure(getTrainCalculationStations(train), train.timetable, startIndex, estimateRunningTimePure);
 }
 
 function estimateRunningTime(index) {
-  if (index <= 0 || !project.stations[index] || !project.stations[index - 1]) return 1;
-  const distance = Math.max(0, project.stations[index].distance - project.stations[index - 1].distance);
-  const speed = project.stations[index - 1].speed || 80;
-  return Math.max(1, Math.ceil((distance / Math.max(1, speed)) * 60));
+  return estimateRunningTimePure(getTrainCalculationStations(activeTrain()), index);
+}
+
+function getTrainStations(train) {
+  if (!train || train.direction !== -1) return project.stations;
+  return project.stations.slice().reverse();
+}
+
+function getTrainCalculationStations(train) {
+  const stations = getTrainStations(train);
+  if (!train || train.direction !== -1) return stations;
+  const maxDistance = project.stations.at(-1)?.distance || 0;
+  return stations.map((station, index) => ({
+    ...station,
+    distance: maxDistance - station.distance,
+    speed: index === stations.length - 1 ? 0 : stations[index + 1].speed,
+  }));
 }
 
 function renderShell() {
@@ -185,7 +120,7 @@ function renderShell() {
   if ($('#project-breadcrumb')) $('#project-breadcrumb').textContent = project.name;
   const train = activeTrain();
   if ($('#train-name')) $('#train-name').value = train?.name || '';
-  if ($('#graph-train-name')) $('#graph-train-name').textContent = train?.name || '—';
+  if ($('#graph-train-name')) $('#graph-train-name').textContent = project.trains.length > 1 ? 'all trains' : train?.name || '—';
   if ($('#legend-train-name')) $('#legend-train-name').textContent = train?.name || '—';
 }
 
@@ -236,9 +171,14 @@ function renderInfrastructure() {
 }
 
 function getTimetableRows() {
-  recalculateTimetable();
-  const timetable = activeTrain()?.timetable || [];
-  return project.stations.map((station, index) => {
+  return getTimetableRowsForTrain(activeTrain());
+}
+
+function getTimetableRowsForTrain(train) {
+  if (!train) return [];
+  const timetable = train.timetable || [];
+  recalculateTimetablePure(getTrainCalculationStations(train), timetable, 0, estimateRunningTimePure);
+  return getTrainStations(train).map((station, index) => {
     const row = timetable[index];
     const departure = formatTime(parseTime(row.arrival) + Number(row.dwell || 0));
     return { station, row, departure };
@@ -251,12 +191,14 @@ function renderTrainList() {
     const timetable = train.timetable || [];
     const departure = timetable[0]?.departure || timetable[0]?.arrival || '—';
     const arrival = timetable.at(-1)?.arrival || '—';
+    const origin = train.direction === -1 ? project.stations.at(-1)?.name : project.stations[0]?.name;
+    const destination = train.direction === -1 ? project.stations[0]?.name : project.stations.at(-1)?.name;
     const selected = train.id === selectedTrainId;
     return `
       <div class="train-card${selected ? ' selected' : ''}" data-train-id="${escapeAttribute(train.id)}">
         <button class="train-card-main" data-action="select-train" aria-pressed="${selected}">
           <span class="train-card-code">${escapeHtml(train.name)}</span>
-          <span class="train-card-route">${escapeHtml(project.stations[0]?.name || 'Origin')} → ${escapeHtml(project.stations.at(-1)?.name || 'Destination')}</span>
+          <span class="train-card-route">${escapeHtml(origin || 'Origin')} → ${escapeHtml(destination || 'Destination')}</span>
           <span class="train-card-meta">${departure} departure · ${arrival} arrival</span>
         </button>
         <button class="train-card-delete" data-action="delete-train" aria-label="Delete ${escapeAttribute(train.name)}">×</button>
@@ -308,13 +250,20 @@ function runningTimeFor(index) {
 
 function renderGraph() {
   if (!$('#train-chart')) return;
-  const rows = getTimetableRows();
   const first = project.stations[0];
   const last = project.stations.at(-1);
+  const trainRows = project.trains.map((train) => ({ train, rows: getTimetableRowsForTrain(train) }));
+  const allRows = trainRows.flatMap(({ rows }) => rows);
   $('#graph-origin').textContent = first?.name || '—';
   $('#graph-destination').textContent = last?.name || '—';
-  $('#graph-departure').textContent = rows[0]?.departure || '—';
-  $('#graph-journey').textContent = rows.length > 1 ? durationLabel(parseTime(rows.at(-1).row.arrival) - parseTime(rows[0].departure)) : '—';
+  $('#graph-departure').textContent = project.trains.length > 1 ? 'MULTIPLE' : allRows[0]?.departure || '—';
+  $('#graph-journey').textContent = project.trains.length > 1 ? 'MULTIPLE' : allRows.length > 1 ? durationLabel(parseTime(allRows.at(-1).row.arrival) - parseTime(allRows[0].departure)) : '—';
+  if ($('#graph-legend')) {
+    const colors = ['#ef865b', '#4d82c4', '#9b68b0', '#d49a32', '#2f9b78', '#d45c79'];
+    $('#graph-legend').innerHTML = trainRows.map(({ train }, index) => `
+      <span class="legend-train"><span class="legend-line" style="background:${colors[index % colors.length]}"></span>${escapeHtml(train.name)}</span>
+    `).join('') + '<span class="legend-stations"><span class="legend-dot"></span>Stations</span>';
+  }
   const svg = $('#train-chart');
   if (project.stations.length < 2) {
     svg.innerHTML = '';
@@ -327,10 +276,10 @@ function renderGraph() {
   const margin = { top: 25, right: 30, bottom: 43, left: 116 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const startMinutes = parseTime(rows[0].departure);
-  const finishMinutes = parseTime(rows.at(-1).row.arrival) + 10;
+  const startMinutes = Math.min(...trainRows.map(({ rows }) => parseTime(rows[0]?.departure || '06:40')));
+  const finishMinutes = Math.max(...trainRows.map(({ rows }) => parseTime(rows.at(-1)?.row.arrival || '06:40'))) + 10;
   const totalMinutes = finishMinutes - startMinutes;
-  const gridStep = graphScale;
+  const gridStep = 60;
   const x = (time) => margin.left + ((time - startMinutes) / totalMinutes) * plotWidth;
   const y = (distance) => margin.top + plotHeight - (distance / Math.max(1, last.distance)) * plotHeight;
   const parts = [];
@@ -349,19 +298,22 @@ function renderGraph() {
     parts.push(`<text x="${margin.left - 24}" y="${yPosition + 4}" text-anchor="end" fill="#667489" font-family="Manrope" font-size="11" font-weight="600">${escapeHtml(station.name)}</text>`);
     parts.push(`<text x="${width - margin.right + 10}" y="${yPosition + 4}" fill="#a6afbb" font-family="DM Mono" font-size="9">${formatNumber(station.distance)} km</text>`);
   });
-  const trajectoryPoints = [];
-  rows.forEach(({ station, row, departure }) => {
-    trajectoryPoints.push(`${x(parseTime(station === project.stations[0] ? departure : row.arrival))},${y(station.distance)}`);
-    trajectoryPoints.push(`${x(parseTime(departure))},${y(station.distance)}`);
-  });
-  const points = trajectoryPoints.join(' ');
-  parts.push(`<polyline points="${points}" fill="none" stroke="#ef865b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
-  rows.forEach(({ station, row, departure }) => {
-    const arrivalX = x(parseTime(station === project.stations[0] ? departure : row.arrival));
-    const departureX = x(parseTime(departure));
-    const stationY = y(station.distance);
-    if (departureX - arrivalX > 1) parts.push(`<line x1="${arrivalX}" y1="${stationY}" x2="${departureX}" y2="${stationY}" stroke="#efb19b" stroke-width="5" stroke-linecap="round"/>`);
-    parts.push(`<circle cx="${arrivalX}" cy="${stationY}" r="5" fill="#fff" stroke="#ef865b" stroke-width="2.5"/>`);
+  const colors = ['#ef865b', '#4d82c4', '#9b68b0', '#d49a32', '#2f9b78', '#d45c79'];
+  trainRows.forEach(({ rows }, trainIndex) => {
+    const color = colors[trainIndex % colors.length];
+    const trajectoryPoints = [];
+    rows.forEach(({ station, row, departure }) => {
+      trajectoryPoints.push(`${x(parseTime(station === project.stations[0] ? departure : row.arrival))},${y(station.distance)}`);
+      trajectoryPoints.push(`${x(parseTime(departure))},${y(station.distance)}`);
+    });
+    parts.push(`<polyline points="${trajectoryPoints.join(' ')}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
+    rows.forEach(({ station, row, departure }) => {
+      const arrivalX = x(parseTime(station === project.stations[0] ? departure : row.arrival));
+      const departureX = x(parseTime(departure));
+      const stationY = y(station.distance);
+      if (departureX - arrivalX > 1) parts.push(`<line x1="${arrivalX}" y1="${stationY}" x2="${departureX}" y2="${stationY}" stroke="${color}" stroke-opacity=".35" stroke-width="5" stroke-linecap="round"/>`);
+      parts.push(`<circle cx="${arrivalX}" cy="${stationY}" r="4" fill="#fff" stroke="${color}" stroke-width="2"/>`);
+    });
   });
   parts.push(`<line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#cfd6df" stroke-width="1"/>`);
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -434,24 +386,15 @@ function deleteStation(id) {
   saveProject();
 }
 
-function reverseRoute() {
-  const reversedStations = project.stations.slice().reverse();
-  project.stations = reversedStations.map((station, index) => ({
-    ...station,
-    distance: Number((reversedStations[0].distance - station.distance).toFixed(1)),
-    speed: index === 0 || index === reversedStations.length - 1 ? 0 : station.speed,
-    sectionName: index < reversedStations.length - 1 ? reversedStations[index + 1].sectionName : undefined,
-  }));
-  const currentSelectedTrainId = selectedTrainId;
-  project.trains.forEach((train) => {
-    const lastArrival = train.timetable.at(-1)?.arrival || '06:40';
-    train.timetable = train.timetable.slice().reverse().map((row) => ({ ...row }));
-    train.timetable[0].arrival = lastArrival;
-    train.timetable[0].departure = lastArrival;
-    selectedTrainId = train.id;
-    recalculateTimetable();
-  });
-  selectedTrainId = currentSelectedTrainId;
+function reverseTrainDirection() {
+  const train = activeTrain();
+  if (!train?.timetable?.length) return;
+  const lastArrival = train.timetable.at(-1).arrival || '06:40';
+  train.direction = train.direction === -1 ? 1 : -1;
+  train.timetable = train.timetable.slice().reverse().map((row) => ({ ...row }));
+  train.timetable[0].arrival = lastArrival;
+  train.timetable[0].departure = lastArrival;
+  recalculateTimetable();
   renderAll();
   saveProject();
 }
@@ -466,6 +409,7 @@ function deleteTrain(id) {
     const replacement = {
       id: `train-${Date.now()}`,
       name: 'Train 1',
+      direction: 1,
       timetable: createEstimatedTimetable(),
     };
     project.trains.push(replacement);
@@ -492,12 +436,13 @@ document.addEventListener('click', (event) => {
 });
 
 $('#add-station')?.addEventListener('click', addStation);
-$('#reverse-route')?.addEventListener('click', reverseRoute);
+$('#reverse-route')?.addEventListener('click', reverseTrainDirection);
 $('#add-train')?.addEventListener('click', () => {
   const id = `train-${Date.now()}`;
   const train = {
     id,
     name: `Train ${project.trains.length + 1}`,
+    direction: 1,
     timetable: createEstimatedTimetable(),
   };
   project.trains.push(train);
@@ -581,12 +526,6 @@ $('#export-project')?.addEventListener('click', () => {
   link.click();
   URL.revokeObjectURL(url);
 });
-
-$$('.scale-button').forEach((button) => button.addEventListener('click', () => {
-  graphScale = Number(button.dataset.scale);
-  $$('.scale-button').forEach((item) => item.classList.toggle('active', item === button));
-  renderGraph();
-}));
 
 $('#download-svg')?.addEventListener('click', () => {
   const svg = $('#train-chart');
