@@ -262,6 +262,7 @@ function renderTrainList() {
           <span class="train-card-route">${escapeHtml(origin || 'Origin')} → ${escapeHtml(destination || 'Destination')}</span>
           <span class="train-card-meta">${departure} departure · ${arrival} arrival</span>
         </button>
+        <button class="train-card-copy" data-action="copy-train" aria-label="Copy ${escapeAttribute(train.name)}">Copy</button>
         <button class="train-card-delete" data-action="delete-train" aria-label="Delete ${escapeAttribute(train.name)}">×</button>
       </div>
     `;
@@ -346,7 +347,7 @@ function renderGraph() {
   const startMinutes = Math.floor(earliestMinutes / 60) * 60;
   const finishMinutes = Math.ceil(latestMinutes / 60) * 60;
   const totalMinutes = finishMinutes - startMinutes;
-  const gridStep = 15;
+  const gridStep = 10;
   const x = (time) => margin.left + ((time - startMinutes) / totalMinutes) * plotWidth;
   const y = (distance) => margin.top + plotHeight - (distance / Math.max(1, last.distance)) * plotHeight;
   const parts = [];
@@ -492,6 +493,20 @@ function deleteTrain(id) {
   saveProject();
 }
 
+function copyTrain(id) {
+  const source = project.trains.find((train) => train.id === id);
+  if (!source) return;
+  const copy = {
+    ...clone(source),
+    id: `train-${Date.now()}`,
+    name: `${source.name} copy`,
+  };
+  project.trains.push(copy);
+  selectTrain(copy.id);
+  renderAll();
+  saveProject();
+}
+
 document.addEventListener('click', (event) => {
   const tab = event.target.closest('[data-tab-target]');
   if (tab) setTab(tab.dataset.tabTarget);
@@ -502,6 +517,8 @@ document.addEventListener('click', (event) => {
     selectTrain(trainButton.closest('[data-train-id]').dataset.trainId);
     renderAll();
   }
+  const copyTrainButton = event.target.closest('[data-action="copy-train"]');
+  if (copyTrainButton) copyTrain(copyTrainButton.closest('[data-train-id]').dataset.trainId);
   const deleteTrainButton = event.target.closest('[data-action="delete-train"]');
   if (deleteTrainButton) deleteTrain(deleteTrainButton.closest('[data-train-id]').dataset.trainId);
 });
