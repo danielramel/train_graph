@@ -185,7 +185,7 @@ function renderInfrastructure() {
         <div class="field-with-unit station-distance">${index === 0
           ? '<span class="field-unit">—</span>'
           : `<input class="inline-input" data-field="distance" type="number" min="0" step="0.1" value="${station.distance}" aria-label="${station.name} distance" /><span class="field-unit">KM</span>`}</div>
-        <div class="field-with-unit station-tracks"><input class="inline-input tracks-input" data-field="tracks" type="number" min="1" max="4" step="1" value="${station.tracks || 2}" aria-label="${station.name} number of tracks" /><span class="field-unit">TRACKS</span></div>
+        <div class="field-with-unit station-tracks"><input class="inline-input tracks-input" data-field="tracks" type="number" min="1" max="4" step="1" value="${station.tracks || 2}" aria-label="${station.name} number of platforms" /><span class="field-unit">PLATFORMS</span></div>
         <button class="delete-button" data-action="delete-station" aria-label="Delete ${station.name}" ${project.stations.length <= 2 ? 'disabled' : ''}>×</button>
       </div>
       ${!isLast ? `
@@ -309,15 +309,17 @@ function renderGraph() {
     return;
   }
   $('#chart-empty').hidden = true;
-  const width = 1050;
-  const height = 420;
+  const width = 1400;
+  const height = 520;
   const margin = { top: 25, right: 30, bottom: 43, left: 116 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const startMinutes = Math.min(...trainRows.map(({ rows }) => parseTime(rows[0]?.departure || '06:40')));
-  const finishMinutes = Math.max(...trainRows.map(({ rows }) => parseTime(rows.at(-1)?.row.arrival || '06:40'))) + 10;
+  const earliestMinutes = Math.min(...trainRows.map(({ rows }) => parseTime(rows[0]?.departure || '06:40')));
+  const latestMinutes = Math.max(...trainRows.map(({ rows }) => parseTime(rows.at(-1)?.row.arrival || '06:40')));
+  const startMinutes = Math.floor(earliestMinutes / 60) * 60;
+  const finishMinutes = Math.ceil(latestMinutes / 60) * 60;
   const totalMinutes = finishMinutes - startMinutes;
-  const gridStep = 60;
+  const gridStep = 15;
   const x = (time) => margin.left + ((time - startMinutes) / totalMinutes) * plotWidth;
   const y = (distance) => margin.top + plotHeight - (distance / Math.max(1, last.distance)) * plotHeight;
   const parts = [];
@@ -331,10 +333,14 @@ function renderGraph() {
   }
   project.stations.forEach((station) => {
     const yPosition = y(station.distance);
-    parts.push(`<line x1="${margin.left}" y1="${yPosition}" x2="${width - margin.right}" y2="${yPosition}" stroke="#edf0f4" stroke-width="1"/>`);
+    const platformCount = Math.min(4, Math.max(1, Math.round(Number(station.tracks) || 1))); // Limit to 4 platforms for visual clarity
+    const platformSpacing = 4;
+    for (let platformIndex = 0; platformIndex < platformCount; platformIndex += 1) {
+      const platformOffset = (platformIndex - (platformCount - 1) / 2) * platformSpacing;
+      parts.push(`<line x1="${margin.left}" y1="${yPosition + platformOffset}" x2="${width - margin.right}" y2="${yPosition + platformOffset}" stroke="#edf0f4" stroke-width="1"/>`);
+    }
     parts.push(`<circle cx="${margin.left - 12}" cy="${yPosition}" r="4" fill="#fff" stroke="#0d9f91" stroke-width="2"/>`);
     parts.push(`<text x="${margin.left - 24}" y="${yPosition + 4}" text-anchor="end" fill="#667489" font-family="Manrope" font-size="11" font-weight="600">${escapeHtml(station.name)}</text>`);
-    parts.push(`<text x="${width - margin.right + 10}" y="${yPosition + 4}" fill="#a6afbb" font-family="DM Mono" font-size="9">${formatNumber(station.distance)} km</text>`);
   });
   const colors = ['#ef865b', '#4d82c4', '#9b68b0', '#d49a32', '#2f9b78', '#d45c79'];
   trainRows.forEach(({ rows }, trainIndex) => {
