@@ -23,12 +23,12 @@ const defaultProject = {
     ],
   }],
   stations: [
-    { id: 'northport', name: 'Northport', distance: 0, speed: 100 },
-    { id: 'pine-junction', name: 'Pine Junction', distance: 8.4, speed: 120 },
-    { id: 'riverside', name: 'Riverside', distance: 17.2, speed: 100 },
-    { id: 'old-mill', name: 'Old Mill', distance: 25.9, speed: 80 },
-    { id: 'hillcrest', name: 'Hillcrest', distance: 34.6, speed: 100 },
-    { id: 'eastvale', name: 'Eastvale', distance: 42.8, speed: 0 },
+    { id: 'northport', name: 'Northport', distance: 0, speed: 100, tracks: 2 },
+    { id: 'pine-junction', name: 'Pine Junction', distance: 8.4, speed: 120, tracks: 2 },
+    { id: 'riverside', name: 'Riverside', distance: 17.2, speed: 100, tracks: 2 },
+    { id: 'old-mill', name: 'Old Mill', distance: 25.9, speed: 80, tracks: 2 },
+    { id: 'hillcrest', name: 'Hillcrest', distance: 34.6, speed: 100, tracks: 2 },
+    { id: 'eastvale', name: 'Eastvale', distance: 42.8, speed: 0, tracks: 2 },
   ],
 };
 
@@ -142,20 +142,18 @@ function renderInfrastructure() {
       <div class="station-row" data-station-id="${station.id}">
         <span class="order-number">${String(index + 1).padStart(2, '0')}</span>
         <div class="station-main">
-          <span class="station-marker"></span>
           <div>
             <input class="station-name-input" data-field="name" value="${escapeAttribute(station.name)}" aria-label="Station ${index + 1} name" />
-            <div class="station-subtitle">${index === 0 ? 'Origin station' : isLast ? 'Terminal station' : `Station ${String(index).padStart(2, '0')}`}</div>
           </div>
         </div>
         <div class="field-with-unit station-distance">${index === 0
           ? '<span class="field-unit">—</span>'
           : `<input class="inline-input" data-field="distance" type="number" min="0" step="0.1" value="${station.distance}" aria-label="${station.name} distance" /><span class="field-unit">KM</span>`}</div>
+        <div class="field-with-unit station-tracks"><input class="inline-input tracks-input" data-field="tracks" type="number" min="1" max="4" step="1" value="${station.tracks || 2}" aria-label="${station.name} number of tracks" /><span class="field-unit">TRACKS</span></div>
         <button class="delete-button" data-action="delete-station" aria-label="Delete ${station.name}" ${project.stations.length <= 2 ? 'disabled' : ''}>×</button>
       </div>
       ${!isLast ? `
         <div class="section-row" data-station-id="${station.id}">
-          <span class="section-connector"></span>
           <div class="section-details">
             <input class="section-name-input" data-field="sectionName" value="${escapeAttribute(sectionName)}" aria-label="Section between ${station.name} and ${nextStation.name}" />
             <div class="section-metrics">
@@ -237,6 +235,10 @@ function renderTimetable() {
       <span class="time-cell"><strong class="${index === 0 ? 'teal' : ''}">${index === rows.length - 1 ? '—' : departure}</strong></span>
       <div class="field-with-unit">${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="running" type="number" min="1" step="1" value="${runningTimeFor(index)}" aria-label="Running time to ${station.name}" /> <span class="field-unit">min</span>`}</div>
       <div class="field-with-unit">${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="dwell" type="number" min="0" step="1" value="${row.dwell}" aria-label="Dwell at ${station.name}" /> <span class="field-unit">min</span>`}</div>
+      <select class="time-field stop-input" data-field="stop" aria-label="${station.name} stop value">
+        <option value="1" ${row.stop === 0 ? '' : 'selected'}>Yes</option>
+        <option value="0" ${row.stop === 0 ? 'selected' : ''}>No</option>
+      </select>
     </div>
   `).join('');
   $('#timetable-count').textContent = `${rows.length} STOPS`;
@@ -357,7 +359,7 @@ function addStation() {
   const previousRow = previousRows[Math.max(0, terminalIndex - 1)];
   const distance = Number((project.stations.at(-1).distance - 7.5).toFixed(1));
   const run = 6;
-  const newStation = { id: `station-${Date.now()}`, name: 'New station', distance: Math.max(previousStation.distance + 0.1, distance), speed: 100 };
+  const newStation = { id: `station-${Date.now()}`, name: 'New station', distance: Math.max(previousStation.distance + 0.1, distance), speed: 100, tracks: previousStation.tracks || 2 };
   project.stations.splice(terminalIndex, 0, newStation);
   project.trains.forEach((train) => {
     const previousTrainRow = train.timetable[Math.max(0, terminalIndex - 1)] || previousRow;
@@ -461,6 +463,7 @@ $('#station-list')?.addEventListener('change', (event) => {
   const field = input.dataset.field;
   if (field === 'name') station.name = input.value.trim() || 'Unnamed station';
   else if (field === 'sectionName') station.sectionName = input.value.trim() || 'Unnamed section';
+  else if (field === 'tracks') station[field] = Math.min(4, Math.max(1, Number(input.value) || 1));
   else station[field] = Math.max(0, Number(input.value) || 0);
   project.stations = project.stations.map((item, index, stations) => index === 0 ? { ...item, distance: 0 } : index === stations.length - 1 ? { ...item, speed: 0 } : item);
   renderAll();
@@ -485,6 +488,8 @@ $('#timetable-list')?.addEventListener('change', (event) => {
     timetable[index].run = Math.max(1, Number(input.value) || 1);
     timetable[index].arrival = formatTime(parseTime(previous.arrival) + Number(previous.dwell || 0) + timetable[index].run);
     recalculateTimetable(index);
+  } else if (field === 'stop') {
+    timetable[index].stop = Number(input.value) === 0 ? 0 : 1;
   }
   renderAll();
   saveProject();

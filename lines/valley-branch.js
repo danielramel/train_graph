@@ -13,10 +13,10 @@ window.railGraphLines['valley-branch'] = {
     ],
   }],
   stations: [
-    { id: 'cedar-falls', name: 'Cedar Falls', distance: 0, speed: 80 },
-    { id: 'maple-crossing', name: 'Maple Crossing', distance: 6.2, speed: 90 },
-    { id: 'brookfield', name: 'Brookfield', distance: 13.8, speed: 70 },
-    { id: 'stonebridge', name: 'Stonebridge', distance: 21.4, speed: 80 },
-    { id: 'summit', name: 'Summit', distance: 28.6, speed: 0 },
+    { id: 'cedar-falls', name: 'Cedar Falls', distance: 0, speed: 80, tracks: 2 },
+    { id: 'maple-crossing', name: 'Maple Crossing', distance: 6.2, speed: 90, tracks: 2 },
+    { id: 'brookfield', name: 'Brookfield', distance: 13.8, speed: 70, tracks: 2 },
+    { id: 'stonebridge', name: 'Stonebridge', distance: 21.4, speed: 80, tracks: 2 },
+    { id: 'summit', name: 'Summit', distance: 28.6, speed: 0, tracks: 2 },
   ],
 };

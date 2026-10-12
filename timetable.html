@@ -9,8 +9,8 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand"><div class="brand-mark"><span></span><span></span><span></span></div><div><strong>RailGraph</strong><small>TRAIN GRAPH CREATOR</small></div></div>
+      <aside class="sidebar" id="sidebar">
+        <div class="brand"><div class="brand-mark"><span></span><span></span><span></span></div><div><strong><a href="index.html">RailGraph</a></strong><small>TRAIN GRAPH CREATOR</small></div></div>
         <div class="sidebar-label">WORKSPACE</div>
         <nav class="main-nav" id="workspace-nav" aria-label="Workspace"></nav>
         <div class="sidebar-bottom">
@@ -19,14 +19,14 @@
         </div>
       </aside>
       <main class="main-content">
-        <header class="topbar">        <div class="breadcrumb"><span>Projects</span><b>/</b><strong id="project-breadcrumb">Morning regional</strong></div><div class="topbar-actions"><span class="saved-state"><span class="saved-dot"></span><span id="save-status">Saved locally</span></span><button class="button button-secondary" id="reset-project">Reset</button><button class="button button-primary" id="export-project"><span>↓</span> Export JSON</button></div></header>
+        <header class="topbar">        <div class="breadcrumb"><a href="index.html">Projects</a><b>/</b><strong id="project-breadcrumb">Morning regional</strong></div><div class="topbar-actions"><span class="saved-state"><span class="saved-dot"></span><span id="save-status">Saved locally</span></span><button class="button button-secondary" id="reset-project">Reset</button><button class="button button-primary" id="export-project"><span>↓</span> Export JSON</button></div></header>
         <section class="tab-panel active" id="panel-timetable" role="tabpanel">
           <div class="section-intro"><div><h2>Trains</h2><p>Select a train to edit its timetable, or add another service on this route.</p></div><button class="button button-primary" id="add-train"><span>＋</span> Add train</button></div>
           <div class="train-list" id="train-list"></div>
           <div class="train-list-footer"><span class="table-footer-note">Each train shares the project route but has its own schedule.</span><span class="station-count" id="train-count"></span></div>
           <div class="section-intro timetable-editor-heading"><div><h2>Train timetable</h2><p>Set the departure, running times, and dwell for each stop.</p></div><div class="section-actions"><label class="train-name-input"><span>TRAIN</span><input id="train-name" value="RG 201" aria-label="Train name" /></label><button class="button button-secondary" id="reverse-route">⇄ Reverse direction</button></div></div>
           <div class="timetable-summary" id="timetable-summary"></div>
-          <div class="table-card timetable-card"><div class="table-header timetable-grid"><span>STOP</span><span>ARRIVAL</span><span>DEPARTURE</span><span>RUNNING TIME</span><span>DWELL</span></div><div id="timetable-list"></div><div class="table-footer"><span class="table-footer-note"><span class="info-icon">i</span> Edit a running time or dwell to update all following events.</span><span class="station-count" id="timetable-count"></span></div></div>
+          <div class="table-card timetable-card"><div class="table-header timetable-grid"><span>STATION</span><span>ARRIVAL</span><span>DEPARTURE</span><span>RUNNING TIME</span><span>DWELL</span><span>STOPS?</span></div><div id="timetable-list"></div><div class="table-footer"><span class="table-footer-note"><span class="info-icon">i</span> Choose Yes when the train stops at a station, or No when it passes through.</span><span class="station-count" id="timetable-count"></span></div></div>
         </section>
         <footer class="app-footer"><span><span class="keyboard-key">⌘</span><span class="keyboard-key">S</span> Changes are saved automatically</span><span>RailGraph v1.0 <span class="footer-separator">·</span> Built for clear operations</span></footer>
       </main>

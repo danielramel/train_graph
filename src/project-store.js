@@ -24,15 +24,19 @@ export function normalizeProject(parsed, defaultProject, clone) {
     ...clone(defaultProject),
     ...parsed,
     stations: Array.isArray(parsed.stations) && parsed.stations.length > 0
-      ? parsed.stations
+      ? parsed.stations.map((station) => ({
+        ...station,
+        tracks: Math.min(4, Math.max(1, Number(station.tracks) || 2)),
+      }))
       : clone(defaultProject.stations),
     trains: trains.map((train) => ({
       ...train,
-      timetable: train.timetable.map(({ arrival, departure, run, dwell }) => ({
+      timetable: train.timetable.map(({ arrival, departure, run, dwell, stop }) => ({
         arrival,
         ...(departure ? { departure } : {}),
         run,
         dwell,
+        stop: stop === 0 ? 0 : 1,
       })),
     })),
   };
