@@ -155,7 +155,7 @@ function renderInfrastructure() {
       ${!isLast ? `
         <div class="section-row" data-station-id="${station.id}">
           <div class="section-details">
-            <input class="section-name-input" data-field="sectionName" value="${escapeAttribute(sectionName)}" aria-label="Section between ${station.name} and ${nextStation.name}" />
+            <span class="section-name">${escapeHtml(sectionName)}</span>
             <div class="section-metrics">
               <span class="section-metric"><span class="metric-label">LENGTH</span><strong>${formatNumber(sectionLength)}</strong><span class="field-unit">KM</span></span>
               <span class="section-metric"><span class="metric-label">SPEED</span><input class="inline-input speed-input" data-field="speed" type="number" min="1" step="5" value="${station.speed || 0}" aria-label="${sectionName} speed" /><span class="field-unit">KM/H</span></span>
@@ -256,10 +256,10 @@ function renderGraph() {
   const last = project.stations.at(-1);
   const trainRows = project.trains.map((train) => ({ train, rows: getTimetableRowsForTrain(train) }));
   const allRows = trainRows.flatMap(({ rows }) => rows);
-  $('#graph-origin').textContent = first?.name || '—';
-  $('#graph-destination').textContent = last?.name || '—';
-  $('#graph-departure').textContent = project.trains.length > 1 ? 'MULTIPLE' : allRows[0]?.departure || '—';
-  $('#graph-journey').textContent = project.trains.length > 1 ? 'MULTIPLE' : allRows.length > 1 ? durationLabel(parseTime(allRows.at(-1).row.arrival) - parseTime(allRows[0].departure)) : '—';
+  if ($('#graph-origin')) $('#graph-origin').textContent = first?.name || '—';
+  if ($('#graph-destination')) $('#graph-destination').textContent = last?.name || '—';
+  if ($('#graph-departure')) $('#graph-departure').textContent = project.trains.length > 1 ? 'MULTIPLE' : allRows[0]?.departure || '—';
+  if ($('#graph-journey')) $('#graph-journey').textContent = project.trains.length > 1 ? 'MULTIPLE' : allRows.length > 1 ? durationLabel(parseTime(allRows.at(-1).row.arrival) - parseTime(allRows[0].departure)) : '—';
   if ($('#graph-legend')) {
     const colors = ['#ef865b', '#4d82c4', '#9b68b0', '#d49a32', '#2f9b78', '#d45c79'];
     $('#graph-legend').innerHTML = trainRows.map(({ train }, index) => `
@@ -314,7 +314,7 @@ function renderGraph() {
       const departureX = x(parseTime(departure));
       const stationY = y(station.distance);
       if (departureX - arrivalX > 1) parts.push(`<line x1="${arrivalX}" y1="${stationY}" x2="${departureX}" y2="${stationY}" stroke="${color}" stroke-opacity=".35" stroke-width="5" stroke-linecap="round"/>`);
-      parts.push(`<circle cx="${arrivalX}" cy="${stationY}" r="4" fill="#fff" stroke="${color}" stroke-width="2"/>`);
+      if (row.stop !== 0) parts.push(`<circle cx="${arrivalX}" cy="${stationY}" r="4" fill="#fff" stroke="${color}" stroke-width="2"/>`);
     });
   });
   parts.push(`<line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#cfd6df" stroke-width="1"/>`);
@@ -462,7 +462,6 @@ $('#station-list')?.addEventListener('change', (event) => {
   const station = project.stations.find((item) => item.id === row.dataset.stationId);
   const field = input.dataset.field;
   if (field === 'name') station.name = input.value.trim() || 'Unnamed station';
-  else if (field === 'sectionName') station.sectionName = input.value.trim() || 'Unnamed section';
   else if (field === 'tracks') station[field] = Math.min(4, Math.max(1, Number(input.value) || 1));
   else station[field] = Math.max(0, Number(input.value) || 0);
   project.stations = project.stations.map((item, index, stations) => index === 0 ? { ...item, distance: 0 } : index === stations.length - 1 ? { ...item, speed: 0 } : item);
