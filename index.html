@@ -30,31 +30,30 @@
         <h1>Choose a line</h1>
         <p>Select an example project to open it in the line infrastructure editor.</p>
       </div>
-      <div class="line-grid">
-        <article class="line-card">
-          <h2>Morning regional</h2>
-          <p>A six-station regional route from Northport to Eastvale.</p>
-          <div class="line-meta"><span>6 STATIONS</span><span>42.8 KM</span></div>
-          <button class="button button-primary" data-line="morning-regional">Open line</button>
-        </article>
-        <article class="line-card">
-          <h2>Valley branch</h2>
-          <p>A shorter branch line connecting Cedar Falls with Summit.</p>
-          <div class="line-meta"><span>5 STATIONS</span><span>28.6 KM</span></div>
-          <button class="button button-primary" data-line="valley-branch">Open line</button>
-        </article>
-      </div>
+      <div class="line-grid" id="line-grid"></div>
     </main>
-    <script src="lines/morning-regional.js"></script>
-    <script src="lines/valley-branch.js"></script>
     <script>
-      document.querySelectorAll('[data-line]').forEach((button) => {
-        button.addEventListener('click', () => {
-          const line = window.railGraphLines[button.dataset.line];
-          localStorage.setItem('railgraph-project', JSON.stringify(line));
-          window.location.href = 'infrastructure.html';
+      const grid = document.querySelector('#line-grid');
+      fetch('/api/lines')
+        .then((response) => {
+          if (!response.ok) throw new Error(`Could not load lines (${response.status})`);
+          return response.json();
+        })
+        .then((lines) => {
+          grid.innerHTML = Object.entries(lines).map(([id, line]) => {
+            const distance = line.stations.at(-1)?.distance || 0;
+            return `<article class="line-card"><h2>${line.name}</h2><p>Select this line to edit its infrastructure and timetable.</p><div class="line-meta"><span>${line.stations.length} STATIONS</span><span>${distance} KM</span></div><button class="button button-primary" data-line="${id}">Open line</button></article>`;
+          }).join('');
+          grid.querySelectorAll('[data-line]').forEach((button) => button.addEventListener('click', () => {
+            localStorage.setItem('railgraph-line-id', button.dataset.line);
+            localStorage.removeItem('railgraph-project');
+            window.location.href = `infrastructure.html?line=${encodeURIComponent(button.dataset.line)}`;
+          }));
+        })
+        .catch((error) => {
+          grid.innerHTML = `<p>Could not load lines. Start the server with <code>npm start</code>.</p>`;
+          console.error(error);
         });
-      });
     </script>
   </body>
 </html>

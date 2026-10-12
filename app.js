@@ -32,21 +32,46 @@ const defaultProject = {
   ],
 };
 
-let project = loadProject();
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+let project = clone(defaultProject);
 let selectedTrainId = localStorage.getItem('railgraph-selected-train');
-if (!project.trains.some((train) => train.id === selectedTrainId)) selectedTrainId = project.trains[0]?.id;
 let activeTab = 'infrastructure';
 let saveTimer;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
+async function loadProject() {
+  const requestedLineId = new URLSearchParams(window.location.search).get('line');
+  const lineId = requestedLineId || localStorage.getItem('railgraph-line-id');
+  if (lineId || window.location.protocol.startsWith('http')) {
+    try {
+      const response = await fetch(lineId ? `/api/lines/${encodeURIComponent(lineId)}` : '/api/lines');
+      if (!response.ok) throw new Error(`Could not load line (${response.status})`);
+      const data = await response.json();
+      const loaded = lineId ? data : data[Object.keys(data)[0]];
+      if (loaded) {
+        if (lineId) localStorage.setItem('railgraph-line-id', lineId);
+        return normalizeLoadedProject(loaded);
+      }
+    } catch (error) {
+      console.warn('Could not load the project from the lines folder.', error);
+      if (lineId) return clone(defaultProject);
+    }
+  }
+  return loadStoredProject(localStorage, 'railgraph-project', defaultProject, clone);
 }
 
-function loadProject() {
-  return loadStoredProject(localStorage, 'railgraph-project', defaultProject, clone);
+function normalizeLoadedProject(value) {
+  return loadStoredProject(
+    { getItem: () => JSON.stringify(value) },
+    'project',
+    defaultProject,
+    clone,
+  );
 }
 
 function activeTrain() {
@@ -65,14 +90,25 @@ function createEstimatedTimetable(startTime = '06:40') {
 function saveProject() {
   clearTimeout(saveTimer);
   $('#save-status').textContent = 'Saving…';
-  saveTimer = setTimeout(() => {
+  saveTimer = setTimeout(async () => {
     try {
       localStorage.setItem('railgraph-project', JSON.stringify(project));
-      $('#save-status').textContent = 'Saved locally';
-    } catch (error) {
-      $('#save-status').textContent = 'Could not save';
-      console.warn('Could not save the project.', error);
-    }
+      const lineId = localStorage.getItem('railgraph-line-id');
+      if (lineId && window.location.protocol.startsWith('http')) {
+        const response = await fetch(`/api/lines/${encodeURIComponent(lineId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(project),
+        });
+        if (!response.ok) throw new Error(`Could not save line (${response.status})`);
+        $('#save-status').textContent = 'Saved to lines';
+      } else {
+        $('#save-status').textContent = 'Saved locally';
+      }
+      } catch (error) {
+        $('#save-status').textContent = 'Could not save';
+        console.warn('Could not save the project.', error);
+      }
   }, 260);
 }
 
@@ -550,13 +586,17 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-window.addEventListener('storage', (event) => {
+window.addEventListener('storage', async (event) => {
   if (event.key !== 'railgraph-project') return;
-  project = loadProject();
+  project = await loadProject();
   selectTrain(project.trains.some((train) => train.id === selectedTrainId)
     ? selectedTrainId
     : project.trains[0]?.id);
   renderAll();
 });
 
-renderAll();
+loadProject().then((loadedProject) => {
+  project = loadedProject;
+  if (!project.trains.some((train) => train.id === selectedTrainId)) selectedTrainId = project.trains[0]?.id;
+  renderAll();
+});
