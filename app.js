@@ -266,7 +266,7 @@ function renderTimetable() {
 
   $('#timetable-list').innerHTML = rows.map(({ station, row, departure }, index) => `
     <div class="timetable-row" data-row-index="${index}">
-      <div class="stop-cell"><span class="stop-dot"></span><div><div class="stop-name">${escapeHtml(station.name)}</div><div class="stop-role">${index === 0 ? 'ORIGIN' : index === rows.length - 1 ? 'TERMINAL' : `STOP ${String(index).padStart(2, '0')}`}</div></div></div>
+      <div class="stop-cell"><span class="stop-dot"></span><div><div class="stop-name">${escapeHtml(station.name)}</div></div></div>
       <span class="time-cell"><strong>${index === 0 ? '—' : row.arrival}</strong></span>
       <span class="time-cell"><strong class="${index === 0 ? 'teal' : ''}">${index === rows.length - 1 ? '—' : departure}</strong></span>
       <div class="field-with-unit">${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="running" type="number" min="1" step="1" value="${runningTimeFor(index)}" aria-label="Running time to ${station.name}" /> <span class="field-unit">min</span>`}</div>
