@@ -27,7 +27,7 @@ export function createEstimatedTimetable(stations, estimate = estimateRunningTim
       arrival: formatTime(current),
       run: index === 0 ? 0 : estimate(stations, index),
       dwell: index === 0 || index === stations.length - 1 ? 0 : 1,
-      stop: 1,
+      stop: true,
     };
     if (index === 0) row.departure = row.arrival;
     current += row.dwell + (index < stations.length - 1 ? estimate(stations, index + 1) : 0);
@@ -44,7 +44,7 @@ export function recalculateTimetable(stations, timetable, startIndex = 0, estima
       arrival: formatTime(current),
       run: estimate(stations, index),
       dwell: 0,
-      stop: 1,
+      stop: true,
     };
     if (index === safeStartIndex) {
       current = index === 0

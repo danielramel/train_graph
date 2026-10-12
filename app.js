@@ -146,6 +146,33 @@ function getTrainCalculationStations(train) {
   }));
 }
 
+function reorderStationsByDistance() {
+  const previousStations = project.stations;
+  const sortedStations = previousStations
+    .map((station, index) => ({ station, index }))
+    .sort((left, right) => (
+      Number(left.station.distance) - Number(right.station.distance) || left.index - right.index
+    ))
+    .map(({ station }) => station);
+
+  sortedStations[0] = { ...sortedStations[0], distance: 0 };
+  sortedStations[sortedStations.length - 1] = {
+    ...sortedStations.at(-1),
+    speed: 0,
+  };
+
+  project.trains.forEach((train) => {
+    const previousRoute = train.direction === -1 ? previousStations.slice().reverse() : previousStations;
+    const timetableByStationId = new Map(
+      previousRoute.map((station, index) => [station.id, train.timetable[index]]),
+    );
+    const nextRoute = train.direction === -1 ? sortedStations.slice().reverse() : sortedStations;
+    train.timetable = nextRoute.map((station) => timetableByStationId.get(station.id)).filter(Boolean);
+  });
+
+  project.stations = sortedStations;
+}
+
 function renderShell() {
   const first = project.stations[0];
   const last = project.stations[project.stations.length - 1];
@@ -266,14 +293,14 @@ function renderTimetable() {
 
   $('#timetable-list').innerHTML = rows.map(({ station, row, departure }, index) => `
     <div class="timetable-row" data-row-index="${index}">
-      <div class="stop-cell"><span class="stop-dot"></span><div><div class="stop-name">${escapeHtml(station.name)}</div></div></div>
+      <div class="stop-cell"><span class="stop-dot ${row.stop ? 'stop-yes' : 'stop-no'}"></span><div><div class="stop-name">${escapeHtml(station.name)}</div></div></div>
       <span class="time-cell"><strong>${index === 0 ? '—' : row.arrival}</strong></span>
       <span class="time-cell"><strong class="${index === 0 ? 'teal' : ''}">${index === rows.length - 1 ? '—' : departure}</strong></span>
-      <div class="field-with-unit">${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="running" type="number" min="1" step="1" value="${runningTimeFor(index)}" aria-label="Running time to ${station.name}" /> <span class="field-unit">min</span>`}</div>
+      <div class="field-with-unit">${index === 0 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="running" type="number" min="1" step="1" value="${runningTimeFor(index)}" aria-label="Running time to ${station.name}" /> <span class="field-unit">min</span>`}</div>
       <div class="field-with-unit">${index === 0 || index === rows.length - 1 ? '<span class="field-unit">—</span>' : `<input class="time-field" data-field="dwell" type="number" min="0" step="1" value="${row.dwell}" aria-label="Dwell at ${station.name}" /> <span class="field-unit">min</span>`}</div>
-      <select class="time-field stop-input" data-field="stop" aria-label="${station.name} stop value">
-        <option value="1" ${row.stop === 0 ? '' : 'selected'}>Yes</option>
-        <option value="0" ${row.stop === 0 ? 'selected' : ''}>No</option>
+      <select class="time-field stop-input ${row.stop ? 'stop-yes' : 'stop-no'}" data-field="stop" aria-label="${station.name} stop value">
+        <option value="true" ${row.stop ? 'selected' : ''}>Yes</option>
+        <option value="false" ${row.stop ? '' : 'selected'}>No</option>
       </select>
     </div>
   `).join('');
@@ -356,7 +383,7 @@ function renderGraph() {
       const departureX = x(parseTime(departure));
       const stationY = y(station.distance);
       if (departureX - arrivalX > 1) parts.push(`<line x1="${arrivalX}" y1="${stationY}" x2="${departureX}" y2="${stationY}" stroke="${color}" stroke-opacity=".35" stroke-width="5" stroke-linecap="round"/>`);
-      if (row.stop !== 0) parts.push(`<circle cx="${arrivalX}" cy="${stationY}" r="4" fill="#fff" stroke="${color}" stroke-width="2"/>`);
+      if (row.stop) parts.push(`<circle cx="${arrivalX}" cy="${stationY}" r="4" fill="#fff" stroke="${color}" stroke-width="2"/>`);
     });
   });
   parts.push(`<line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="#cfd6df" stroke-width="1"/>`);
@@ -408,7 +435,7 @@ function addStation() {
     train.timetable.splice(terminalIndex, 0, {
       arrival: formatTime(parseTime(previousTrainRow.arrival) + Number(previousTrainRow.dwell || 0) + run),
       run,
-      dwell: 1,
+      dwell: 0,
     });
   });
   recalculateTimetable(terminalIndex);
@@ -506,7 +533,14 @@ $('#station-list')?.addEventListener('change', (event) => {
   if (field === 'name') station.name = input.value.trim() || 'Unnamed station';
   else if (field === 'tracks') station[field] = Math.min(4, Math.max(1, Number(input.value) || 1));
   else station[field] = Math.max(0, Number(input.value) || 0);
-  project.stations = project.stations.map((item, index, stations) => index === 0 ? { ...item, distance: 0 } : index === stations.length - 1 ? { ...item, speed: 0 } : item);
+  if (field === 'distance') reorderStationsByDistance();
+  else {
+    project.stations = project.stations.map((item, index, stations) => (
+      index === 0 ? { ...item, distance: 0 }
+        : index === stations.length - 1 ? { ...item, speed: 0 }
+          : item
+    ));
+  }
   renderAll();
   saveProject();
 });
@@ -530,7 +564,9 @@ $('#timetable-list')?.addEventListener('change', (event) => {
     timetable[index].arrival = formatTime(parseTime(previous.arrival) + Number(previous.dwell || 0) + timetable[index].run);
     recalculateTimetable(index);
   } else if (field === 'stop') {
-    timetable[index].stop = Number(input.value) === 0 ? 0 : 1;
+    timetable[index].stop = input.value === 'true';
+    input.classList.toggle('stop-yes', timetable[index].stop);
+    input.classList.toggle('stop-no', !timetable[index].stop);
   }
   renderAll();
   saveProject();

@@ -36,7 +36,7 @@ export function normalizeProject(parsed, defaultProject, clone) {
         ...(departure ? { departure } : {}),
         run,
         dwell,
-        stop: stop === 0 ? 0 : 1,
+        stop: stop !== false && stop !== 0 && stop !== '0' && stop !== 'false',
       })),
     })),
   };
